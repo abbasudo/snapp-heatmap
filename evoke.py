@@ -5,7 +5,7 @@ import json
 import sys
 import os
 
-#get token from arguments or environment variable or input
+# get token from arguments or environment variable or input
 token = sys.argv[1] if len(sys.argv) > 1 else os.getenv('SNAPP_TOKEN') or input('Enter your Snapp token: ')
 
 # Authorization token
@@ -16,9 +16,9 @@ with open('rides_data.csv', 'w', newline='', encoding='utf-8') as file:
     writer = csv.writer(file)
     # Write the header
     writer.writerow([
-        'index', 'is_delivery', 'latest_ride_status', 'title', 'human_readable_id', 
-        'origin_lat', 'origin_lng', 'destination_lat', 'destination_lng', 
-        'service_type', 'type', 'created_at', 'updated_at', 
+        'index', 'is_delivery', 'latest_ride_status', 'title', 'human_readable_id',
+        'origin_lat', 'origin_lng', 'destination_lat', 'destination_lng',
+        'service_type', 'type', 'created_at', 'updated_at',
         'driver_name', 'vehicle_model', 'is_for_friend', 'final_price'
     ])
 
@@ -30,21 +30,35 @@ with open('rides_data.csv', 'w', newline='', encoding='utf-8') as file:
 
     index = 0
     page = 1
+    max_retries = 3
+
     while True:
         try:
-            # Fetch ride history data
-            response = requests.get(
-                f'https://app.snapp.taxi/api/api-base/v2/passenger/ride/history?page={page}',
-                headers={"authorization": token}
-            )
-            rides = response.json()['data']['rides']
-            
+            # Fetch ride history data with retry mechanism
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(
+                        f'https://app.snapp.taxi/api/api-base/v2/passenger/ride/history?page={page}',
+                        headers={"authorization": token}
+                    )
+                    rides = response.json()['data']['rides']
+                    break  # Exit the retry loop if the request is successful
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+                        print('response from snapp:')
+                        print(json.dumps(response.json(), indent=4))
+                        sleep(1)
+                    else:
+                        print(f"Attempt {attempt + 1} failed: {e}. Moving to next page.")
+                        rides = []
+
             # Break the loop if no more rides are found
             if not rides:
                 print('No more rides. Finished.')
                 break
 
-            # Increment page page for the next request
+            # Increment page for the next request
             page += 1
 
             # Process each ride
@@ -74,7 +88,7 @@ with open('rides_data.csv', 'w', newline='', encoding='utf-8') as file:
 
         except Exception as e:
             print(f"An error occurred: {e}")
-            print('response from snapp:',)
+            print('response from snapp:')
             print(json.dumps(response.json(), indent=4))
             print('Retrying in 1 second...')
             sleep(1)
